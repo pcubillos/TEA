@@ -170,6 +170,12 @@ infile  = sys.argv[1:][0]
 # Retrieve current output directory name given by user
 desc    = sys.argv[1:][1]
 
+# Retrieve guess file (if requested):
+try:
+  guessf = sys.argv[1:][2]
+except:
+  guessf = None
+
 # Check if config file exists in the working directory
 TEA_config = 'TEA.cfg'
 try:
@@ -300,8 +306,16 @@ stoich_arr = stoich_arr[:,sidx]
 # Time / speed testing for balance.py
 if times:
     ini = time.time()
+
 # Initial abundances guess:
-guess = bal.balance(stoich_arr, atom_arr[0], verb)
+if guessf is None:
+  guess = bal.balance(stoich_arr, atom_arr[0], verb)
+else:
+  with open(guessf, 'r') as f:
+    guessvals = np.array(f.read().strip().split(), np.double)
+  # Balance the user-input guess:
+  guess = bal.balance(stoich_arr, atom_arr[0], verb, guess=guessvals)
+
 # Retrieve balance runtime
 if times:
     fin = time.time()

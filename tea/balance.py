@@ -67,7 +67,7 @@ from sympy.solvers import solve
 import format as form
 
 
-def balance(a, b, verb=0, loc_out=None):
+def balance(a, b, verb=0, loc_out=None, guess=None):
   """
   This code produces an initial guess for the first TEA iteration by
   fulfilling the mass balance condition, sum_i(ai_j * y_i) = bj (equation (17)
@@ -118,6 +118,39 @@ def balance(a, b, verb=0, loc_out=None):
   y_bar: Float
      Sum of the mixing ratios.
   """
+  if guess is not None:
+      nspec, natom = np.shape(a)
+      # Indices of atomic species:
+      free_id = [i for i,stoich in enumerate(a) if sum(stoich) == 1]
+      # Indices of fixed species:
+      fix_id = [i for i in range(nspec) if i not in free_id]
+
+      # Set up list of free variables
+      free = [Symbol('y_unknown_{:d}'.format(j)) for j in range(natom)]
+
+      y_init = np.expand_dims(guess, axis=1)
+
+      scale = 1.0
+      while np.any(b - scale*np.sum((a*y_init)[fix_id], axis=0) < 0):
+          scale *= 0.1
+      # Binary search:
+      if scale < 1.0:
+         lo, hi = scale, 1.0
+         for k in range(50):
+             result = b - 0.5*(lo+hi)*np.sum((a*y_init)[fix_id], axis=0)
+             if np.any(result <= 0):
+                 hi = 0.5*(lo + hi)
+             else:
+                 scale = lo = 0.5*(lo + hi)
+
+      # Put all initial mole numbers in y array
+      y = guess * scale
+      y[free_id] = b - scale*np.sum((a*y_init)[fix_id], axis=0)
+      y_bar = np.sum(y, dtype=np.double)
+
+      return y, y_bar
+
+
   # Read in values from header file
   nspec, natom = np.shape(a)
   # Print b values for debugging purposes
