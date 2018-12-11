@@ -59,19 +59,6 @@ import numpy as np
 import format as form
 
 
-def dF_dlam(s, i, x, y, delta, c, x_bar, y_bar, delta_bar):
-    """
-    Equation (34) TEA theory document:
-      dF(lam)/dlam = sum_i delta_i[(g(T)/RT)_i + ln(P) +
-                                   ln(yi+lam*delta_i)/(y_bar+lam*delta_bar)]
-    """
-    dF_dlam = 0
-    for n in np.arange(i):
-        dF_dlam += delta[n] * (c[n] + np.log(y[n] + s*delta[n]) -
-                               np.log(y_bar + s*delta_bar))
-    return dF_dlam
-
-
 def lambdacorr(it_num, verb, input, info, save_info=None):
     '''
     This module applies lambda correction method (Section 4 in the TEA theory
@@ -167,40 +154,29 @@ def lambdacorr(it_num, verb, input, info, save_info=None):
     # Exponent parameter that gives a value close to zero for the start of
     #          lambda exploration
     lower = -50
-
     # Define number of steps to explore exponential range
     steps = 100
-
     # Create lower exponential range
     low_range = np.exp(np.linspace(lower, 0, steps+1))
 
     # Create linear, evenly spaced range, high_range
-    high_step = 0.01
-    high_range = np.arange(0.5, 1 + high_step, high_step)
+    high_range = np.linspace(0.5, 1.0, steps)
 
     # Combine the two ranges to create one overall range for lambda exploration
     smart_range = np.append(low_range[low_range <= range_split], high_range)
 
-    # Set that lambda is not found
-    lam_not_found = True
-
-    # Retrieve last lambda value explored before the minimum energy is passed
+    # Test Equation (34) TEA theory document until it fails:
+    lam = 0.0
     for h in smart_range:
-        val = dF_dlam(h, i, x, y, delta, c, x_bar, y_bar, delta_bar)
-        if val > 0 or np.isnan(val):
-            break
-
-        # If lambda found, take lambda and set lambda not found to false
+      dFdlam = np.sum(delta * (c + np.log(y + h*delta)
+                                - np.log(y_bar + h*delta_bar)))
+      if not np.isnan(dFdlam) and dFdlam < 0:
         lam = h
-        lam_not_found = False
+      else:
+        break
 
-    # If lambda is not found (break), function F (equation (33) in the TEA
-    #    theory document) set the final x mole numbers to the values calculated
-    #    in the last iteration output
-    if lam_not_found:
-        x_corr = y
-    else:
-        x_corr = y + lam * delta
+    # Apply lambda correction (equation (33) in the TEA theory document):
+    x_corr = y + lam * delta
 
     # Correct x values given this value of lambda
     x_corr_bar = np.sum(x_corr)
